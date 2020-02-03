@@ -28,21 +28,13 @@ enum VideoOvelayPosition {
 
 class VideoOvelay {
     
-    func makeTempFileName() -> String {
-        
-        return Date.getTodaysDateWithTime() + "_.mp4"
-    }
     
-    func getTempVideoURL() -> URL {
-        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(makeTempFileName())
-    }
     
-    func addOverlayText(_ text: String, fileURL: URL, position: VideoOvelayPosition, completion: @escaping (Error?) -> Void) {
-        
-        let destURL = getTempVideoURL()
+    func addOverlayText(_ text: String, fileURL: URL, destURL: URL, position: VideoOvelayPosition, completion: @escaping (Error?) -> Void) {
         
         print("destURL = \(destURL)")
         
+        // Create AVMutableComposition object. This object will hold your AVMutableCompositionTrack instances.
         let composition = AVMutableComposition()
         let vidAsset = AVURLAsset(url: fileURL, options: nil)
         
@@ -50,24 +42,52 @@ class VideoOvelay {
         
         // get video track
         let vtrack =  vidAsset.tracks(withMediaType: AVMediaType.video)
-        guard let videoTrack: AVAssetTrack = vtrack.first else {
+        guard let videoAssetTrack: AVAssetTrack = vtrack.first else {
             print("vtrack.first nil")
             completion(nil)
             return
         }
+        
+        // Video track
         //let vid_duration = videoTrack.timeRange.duration
         let vid_timerange = CMTimeRangeMake(start: CMTime.zero, duration: vidAsset.duration)
+        let compositionvideoTrack: AVMutableCompositionTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: CMPersistentTrackID())!
         
         do {
-            let compositionvideoTrack:AVMutableCompositionTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: CMPersistentTrackID())!
-            try compositionvideoTrack.insertTimeRange(vid_timerange, of: videoTrack, at: CMTime.zero)
-            compositionvideoTrack.preferredTransform = videoTrack.preferredTransform
+            try compositionvideoTrack.insertTimeRange(vid_timerange, of: videoAssetTrack, at: CMTime.zero)
+            //compositionvideoTrack.preferredTransform = videoAssetTrack.preferredTransform
         } catch {
             print("compositionvideoTrack nil")
         }
         
-        // Watermark Effect
-        let size = videoTrack.naturalSize//CGSize(width: videoTrack.naturalSize.height, height: videoTrack.naturalSize.width) //videoTrack.naturalSize
+        // Create AVMutableVideoCompositionInstruction
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRangeMake(start: CMTime.zero, duration: composition.duration)
+        
+        
+        //  Create an AVMutableVideoCompositionLayerInstruction for the video track and fix the orientation.
+        let layerinstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionvideoTrack)
+        
+        let videoTransform = videoAssetTrack.preferredTransform
+        var isVideoAssetPortrait_  = false
+        if (videoTransform.a == 0 && videoTransform.b == 1.0 && videoTransform.c == -1.0 && videoTransform.d == 0) {
+            isVideoAssetPortrait_ = true
+            print("is portrait")
+        }
+        if (videoTransform.a == 0 && videoTransform.b == -1.0 && videoTransform.c == 1.0 && videoTransform.d == 0) {
+            isVideoAssetPortrait_ = true
+            print("is portrait")
+        }
+        
+        layerinstruction.setTransform(videoAssetTrack.preferredTransform, at: CMTime.zero)
+        layerinstruction.setOpacity(0.0, at: vidAsset.duration)
+        
+        let size: CGSize
+        if isVideoAssetPortrait_ {
+            size = CGSize(width: videoAssetTrack.naturalSize.height, height: videoAssetTrack.naturalSize.width)
+        } else {
+            size = videoAssetTrack.naturalSize
+        }
         print("\n overlay video size = \(size)")
 
         let imglayer = CALayer()
@@ -123,6 +143,7 @@ class VideoOvelay {
             
             titleLayer.alignmentMode = CATextLayerAlignmentMode.center
             titleLayer.frame = CGRect(x: 20, y: size.height / 2 - 180 / 2, width: size.width - 40, height: 180)
+            
         }
         
         titleLayerShadow.display()
@@ -139,15 +160,13 @@ class VideoOvelay {
         parentlayer.addSublayer(titleLayer)
         
         let layercomposition = AVMutableVideoComposition()
-        layercomposition.frameDuration = CMTimeMake(value: 1, timescale: 60)
+        layercomposition.frameDuration = CMTimeMake(value: 1, timescale: 30)//60
         layercomposition.renderSize = size
         layercomposition.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: videolayer, in: parentlayer)
         
         // instruction for watermark
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRangeMake(start: CMTime.zero, duration: composition.duration)
-        let videotrack = composition.tracks(withMediaType: AVMediaType.video)[0] as AVAssetTrack
-        let layerinstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videotrack)
+        
+        
         instruction.layerInstructions = [layerinstruction]
         layercomposition.instructions = [instruction]
         
@@ -186,4 +205,5 @@ class VideoOvelay {
         
         
     }
+    
 }
