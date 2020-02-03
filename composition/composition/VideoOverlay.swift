@@ -84,8 +84,13 @@ class VideoOvelay {
         
         let size: CGSize
         if isVideoAssetPortrait_ {
+            let t1: CGAffineTransform = CGAffineTransform(translationX: videoAssetTrack.naturalSize.height, y: 0)
+            let t2: CGAffineTransform = t1.rotated(by: CGFloat(Double.pi / 2))
+            let finalTransform: CGAffineTransform = t2
+            layerinstruction.setTransform(finalTransform, at: CMTime.zero)
             size = CGSize(width: videoAssetTrack.naturalSize.height, height: videoAssetTrack.naturalSize.width)
         } else {
+            layerinstruction.setTransform(videoAssetTrack.preferredTransform, at: CMTime.zero)
             size = videoAssetTrack.naturalSize
         }
         print("\n overlay video size = \(size)")
